@@ -33,6 +33,7 @@ const DEFAULT_STATE = {
   sheetsWebhookUrl: '',
   sheetsApiKey: ''
 };
+const SHEETS_TIMEOUT_MS = 15000;
 
 const FIXED_RULES = {
   'DOMICILIARIOS': {
@@ -443,11 +444,11 @@ async function pushToSheets(scope = 'current') {
     return { ok: false, sent: 0 };
   }
 
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
   if (cfg.apiKey) headers['X-Api-Key'] = cfg.apiKey;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  const timer = setTimeout(() => controller.abort(), SHEETS_TIMEOUT_MS);
   const res = await fetch(cfg.url, {
     method: 'POST',
     headers,
@@ -459,7 +460,7 @@ async function pushToSheets(scope = 'current') {
   clearTimeout(timer);
   if (!res.ok) throw new Error(`Sheets respondió ${res.status}`);
   let json = null;
-  try { json = await res.json(); } catch {}
+  try { json = await res.json(); } catch (e) { console.warn('Sheets respondió sin JSON válido', e); }
   if (json && json.ok === false) {
     throw new Error(json.message || 'Sheets rechazó la solicitud.');
   }
@@ -995,7 +996,7 @@ function isRowValid(r) {
   const phoneDigits = (r.Telefono || '').replace(/\D/g, '');
   const phoneOk = !!phoneDigits && phoneDigits.length >= 7 && phoneDigits.length <= 11;
   const email = (r.Email || '').trim();
-  const emailOk = email ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) : false;
+  const emailOk = email ? /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email) : false;
   return nameOk && (phoneOk || emailOk);
 }
 

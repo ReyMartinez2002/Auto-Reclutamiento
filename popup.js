@@ -258,7 +258,9 @@ async function saveSheetsConfig() {
       payload: { url: sheetsUrl.value, apiKey: sheetsApiKey.value }
     });
   } catch (e) {
-    alert('No se pudo guardar: ' + (e?.message || e));
+    const msg = 'No se pudo guardar: ' + (e?.message || e);
+    console.error(msg);
+    statusInfo.textContent = msg;
   }
 }
 
@@ -267,7 +269,9 @@ async function sendSheets(scope) {
     await chrome.runtime.sendMessage({ type: 'push-to-sheets', scope });
     await refreshStatus();
   } catch (e) {
-    alert('No se pudo enviar a Sheets: ' + (e?.message || e));
+    const msg = 'No se pudo enviar a Sheets: ' + (e?.message || e);
+    console.error(msg);
+    statusInfo.textContent = msg;
   }
 }
 
