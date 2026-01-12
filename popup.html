@@ -53,6 +53,20 @@
   </section>
 
   <section class="block">
+    <h2>Google Sheets / Webhook</h2>
+    <label class="mini">URL del endpoint</label>
+    <input type="url" id="sheetsUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    <label class="mini mt4">Clave/API (opcional)</label>
+    <input type="text" id="sheetsApiKey" placeholder="Encabezado X-Api-Key opcional">
+    <div class="row gap mt8 wrap">
+      <button id="btnSaveSheets" class="primary">Guardar conexión</button>
+      <button id="btnSendSheets">Enviar rol actual</button>
+      <button id="btnSendSheetsAll">Enviar todos los roles</button>
+    </div>
+    <p class="hint">Envía los datos en JSON (rol, filas, fecha). Habilita CORS en tu endpoint de Sheets.</p>
+  </section>
+
+  <section class="block">
     <h2>Modo de estado</h2>
     <select id="estadoMode">
       <option value="auto">Auto (usar reglas)</option>
