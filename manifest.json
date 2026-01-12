@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Auto Reclutamiento CSV/XLS",
+  "version": "0.5.0",
+  "description": "Reglas por rol (fijas y personalizadas), mover candidatos y exportar CSV/Excel. Automatización + diccionario ampliable + backup + gestión de roles.",
+  "permissions": [
+    "storage",
+    "downloads",
+    "scripting",
+    "activeTab",
+    "tabs",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://empresa.co.computrabajo.com/*",
+    "https://*.computrabajo.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Exportador de candidatos",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.computrabajo.com/*", "https://empresa.co.computrabajo.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "capture-current": {
+      "suggested_key": { "default": "Alt+S" },
+      "description": "Capturar candidato de la pestaña actual"
+    },
+    "export-csv": {
+      "suggested_key": { "default": "Alt+E" },
+      "description": "Exportar CSV del rol actual"
+    },
+    "toggle-pause": {
+      "suggested_key": { "default": "Alt+P" },
+      "description": "Pausar/Continuar procesamiento"
+    }
+  }
+}

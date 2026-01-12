@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Auto Reclutamiento</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Reclutamiento</h1>
+    <span class="badge" id="statusBadge">Inactivo</span>
+  </header>
+
+  <section class="block">
+    <label class="lbl">Rol actual</label>
+    <div class="row gap">
+      <select id="roleSelect"></select>
+      <button class="sm" id="btnRefreshRules" title="Refrescar reglas">⟳</button>
+    </div>
+    <div class="row gap mt4">
+      <input id="roleCustom" placeholder="Nuevo rol..." />
+      <button class="sm primary" id="btnAddRole">Añadir</button>
+    </div>
+    <div class="inline-actions">
+      <input type="text" id="newRoleName" placeholder="Nuevo nombre rol" />
+      <button class="sm" id="btnRenameRole" title="Renombrar rol">Renombrar</button>
+      <button class="sm danger" id="btnDeleteRole" title="Eliminar rol">Eliminar</button>
+    </div>
+    <p class="rules" id="rulesInfo"></p>
+  </section>
+
+  <section class="block">
+    <h2>Automatización</h2>
+    <div class="grid2">
+      <div>
+        <label class="mini">Modo</label>
+        <select id="autoMode">
+          <option value="off">Apagado</option>
+          <option value="capture-on-open">Capturar al abrir fichas</option>
+          <option value="scan-and-process">Escanear listas y procesar</option>
+        </select>
+      </div>
+      <div>
+        <label class="mini">Intervalo (seg)</label>
+        <input type="number" id="scanInterval" min="30" value="90">
+      </div>
+    </div>
+    <div class="row gap mt8">
+      <button id="btnSaveAuto" class="primary">Guardar automatización</button>
+    </div>
+    <p class="hint">El escaneo periódico usa alarmas (mínimo ~60s). “Capturar al abrir” actúa al cargar una ficha.</p>
+  </section>
+
+  <section class="block">
+    <h2>Modo de estado</h2>
+    <select id="estadoMode">
+      <option value="auto">Auto (usar reglas)</option>
+      <option value="manual-seleccionados">Forzar Seleccionados</option>
+      <option value="manual-descartados">Forzar Descartados</option>
+    </select>
+    <label class="chk">
+      <input type="checkbox" id="inferGender" checked>
+      <span>Inferir género (para modo auto/hybrid)</span>
+    </label>
+  </section>
+
+  <section class="block">
+    <h2>Género</h2>
+    <label class="mini">Modo de captura de género</label>
+    <select id="genderMode">
+      <option value="auto">Auto (no preguntar)</option>
+      <option value="prompt">Preguntar siempre</option>
+      <option value="hybrid">Híbrido (pregunta si no se infiere)</option>
+    </select>
+
+    <details class="mt8">
+      <summary class="mini">Overrides (nombre=G)</summary>
+      <textarea id="overridesText" rows="6" placeholder="juan=M&#10;maria=F"></textarea>
+      <div class="row gap mt8">
+        <button id="btnSaveGender" class="primary">Guardar Overrides</button>
+        <button id="btnClearOverrides" class="danger">Limpiar</button>
+      </div>
+      <p class="hint">Los overrides tienen máxima prioridad y se rellenan al confirmar en el prompt.</p>
+    </details>
+
+    <details class="mt8" open>
+      <summary class="mini">Diccionario de nombres (usuario) (nombre=G)</summary>
+      <textarea id="dictText" rows="6" placeholder="catalina=F&#10;fernando=M"></textarea>
+      <div class="row gap mt8">
+        <button id="btnSaveDict" class="primary">Guardar Diccionario</button>
+        <button id="btnClearDict" class="danger">Limpiar</button>
+      </div>
+      <div class="inline-actions">
+        <button id="btnExportDict">Exportar diccionario completo</button>
+        <input type="file" id="fileImportDict" accept=".txt,.csv,text/plain" style="display:none">
+        <label class="chk"><input type="checkbox" id="chkMergeDict" checked>Fusionar al importar</label>
+        <button id="btnImportDict">Importar diccionario</button>
+      </div>
+      <p class="small-note">La exportación incluye Base + Usuario + Overrides (prioridad aplicada).</p>
+    </details>
+  </section>
+
+  <section class="block">
+    <h2>Acciones</h2>
+    <div class="grid">
+      <button id="btnCapture">Capturar ficha</button>
+      <button id="btnProcessList">Procesar lista</button>
+      <button id="btnTogglePause">Pausar</button>
+      <button id="btnCancelProcessing" class="danger">Detener</button>
+      <button id="btnExport">CSV (;)</button>
+      <button id="btnExportXls">Excel</button>
+      <button id="btnExportAllCsv">Exportar TODO (CSV)</button>
+      <button id="btnExportAllXls">Exportar TODO (Excel)</button>
+      <button id="btnClear">Vaciar rol</button>
+    </div>
+    <p id="statusInfo" class="statusLine"></p>
+  </section>
+
+  <section class="block">
+    <h2>Regla personalizada</h2>
+    <div class="grid2">
+      <div>
+        <label class="mini">Edad mín</label>
+        <input type="number" id="ageMin" min="0" value="18">
+      </div>
+      <div>
+        <label class="mini">Edad máx</label>
+        <input type="number" id="ageMax" min="0" value="50">
+      </div>
+    </div>
+    <div class="row wrap g8 mt8">
+      <label class="chip"><input type="checkbox" class="gchk" value="M" checked> Hombre (M)</label>
+      <label class="chip"><input type="checkbox" class="gchk" value="F"> Mujer (F)</label>
+    </div>
+    <div class="row gap mt8">
+      <button id="btnSaveRule" class="primary">Guardar/Actualizar regla</button>
+      <button id="btnDeleteRule" class="danger">Eliminar regla</button>
+    </div>
+    <p class="hint">La regla personalizada reemplaza la fija del rol.</p>
+  </section>
+
+  <section class="block">
+    <h2>Backup</h2>
+    <div class="inline-actions">
+      <button id="btnExportBackup">Exportar backup (JSON)</button>
+      <input type="file" id="fileImportBackup" accept=".json,application/json" style="display:none">
+      <button id="btnImportBackup">Importar backup</button>
+    </div>
+    <p class="small-note">El backup incluye roles, reglas, modos y diccionario. Úsalo para migrar entre equipos.</p>
+  </section>
+
+  <footer>
+    <small>Excel 2025 compatible · Verifica la legalidad de filtros por género.</small>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
