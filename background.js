@@ -13,6 +13,9 @@ const HEADERS = [
   'Estado',
   'Fuente'
 ];
+const SHEETS_TIMEOUT_MS = 15000;
+const PHONE_MIN_DIGITS = 7;
+const PHONE_MAX_DIGITS = 11;
 
 const DEFAULT_STATE = {
   roles: ['DOMICILIARIOS', 'CONDUCTORES', 'AUXILIARES CARGA Y DESCARGA', 'DELIVERY'],
@@ -424,8 +427,9 @@ async function saveSheetsConfig({ url, apiKey }) {
   const cleanUrl = (url || '').trim();
   if (cleanUrl) {
     let parsed;
-    try { parsed = new URL(cleanUrl); } catch { throw new Error('URL inválida.'); }
-    if (parsed.protocol !== 'https:') throw new Error('Usa HTTPS para el webhook.');
+    try { parsed = new URL(cleanUrl); }
+    catch (e) { if (e instanceof TypeError) throw new Error('Invalid webhook URL.'); else throw e; }
+    if (parsed.protocol !== 'https:') throw new Error('Use HTTPS for the webhook.');
   }
   await chrome.storage.local.set({
     sheetsWebhookUrl: cleanUrl,
@@ -460,7 +464,7 @@ async function pushToSheets(scope = 'current') {
   clearTimeout(timer);
   if (!res.ok) throw new Error(`Sheets respondió ${res.status}`);
   let json = null;
-  try { json = await res.json(); } catch (e) { console.warn('Sheets respondió sin JSON válido', e); }
+  try { json = await res.json(); } catch (e) { console.warn('Sheets response was not valid JSON', e); }
   if (json && json.ok === false) {
     throw new Error(json.message || 'Sheets rechazó la solicitud.');
   }
@@ -994,7 +998,7 @@ function dedupeByDocEmail(rows) {
 function isRowValid(r) {
   const nameOk = (r.Candidato || '').trim().length >= 2;
   const phoneDigits = (r.Telefono || '').replace(/\D/g, '');
-  const phoneOk = !!phoneDigits && phoneDigits.length >= 7 && phoneDigits.length <= 11;
+  const phoneOk = !!phoneDigits && phoneDigits.length >= PHONE_MIN_DIGITS && phoneDigits.length <= PHONE_MAX_DIGITS;
   const email = (r.Email || '').trim();
   const emailOk = email ? /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email) : false;
   return nameOk && (phoneOk || emailOk);
