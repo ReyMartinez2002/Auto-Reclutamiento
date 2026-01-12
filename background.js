@@ -36,7 +36,6 @@ const DEFAULT_STATE = {
   sheetsWebhookUrl: '',
   sheetsApiKey: ''
 };
-const SHEETS_TIMEOUT_MS = 15000;
 
 const FIXED_RULES = {
   'DOMICILIARIOS': {
@@ -428,7 +427,7 @@ async function saveSheetsConfig({ url, apiKey }) {
   if (cleanUrl) {
     let parsed;
     try { parsed = new URL(cleanUrl); }
-    catch (e) { if (e instanceof TypeError) throw new Error('Invalid webhook URL.'); else throw e; }
+    catch (e) { if (e instanceof TypeError) throw new Error('Invalid webhook URL format. Please provide a valid URL.'); else throw e; }
     if (parsed.protocol !== 'https:') throw new Error('Use HTTPS for the webhook.');
   }
   await chrome.storage.local.set({
@@ -464,7 +463,7 @@ async function pushToSheets(scope = 'current') {
   clearTimeout(timer);
   if (!res.ok) throw new Error(`Sheets respondió ${res.status}`);
   let json = null;
-  try { json = await res.json(); } catch (e) { console.warn('Sheets response was not valid JSON', e); }
+  try { json = await res.json(); } catch (e) { console.warn('Google Sheets webhook returned invalid JSON response', e); }
   if (json && json.ok === false) {
     throw new Error(json.message || 'Sheets rechazó la solicitud.');
   }
