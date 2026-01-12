@@ -33,6 +33,13 @@ const autoMode = document.getElementById('autoMode');
 const scanInterval = document.getElementById('scanInterval');
 const btnSaveAuto = document.getElementById('btnSaveAuto');
 
+// Google Sheets / Webhook
+const sheetsUrl = document.getElementById('sheetsUrl');
+const sheetsApiKey = document.getElementById('sheetsApiKey');
+const btnSaveSheets = document.getElementById('btnSaveSheets');
+const btnSendSheets = document.getElementById('btnSendSheets');
+const btnSendSheetsAll = document.getElementById('btnSendSheetsAll');
+
 const btnCapture = document.getElementById('btnCapture');
 const btnProcessList = document.getElementById('btnProcessList');
 const btnTogglePause = document.getElementById('btnTogglePause');
@@ -77,6 +84,7 @@ async function init() {
   await loadGenderConfig();
   await loadGenderDict();
   await loadAutomation();
+  await loadSheetsConfig();
   await refreshStatus();
   await refreshRulesDescription();
 
@@ -155,6 +163,9 @@ async function init() {
 
   genderMode.addEventListener('change', saveGenderConfig);
   btnSaveAuto.addEventListener('click', saveAutomation);
+  btnSaveSheets.addEventListener('click', saveSheetsConfig);
+  btnSendSheets.addEventListener('click', () => sendSheets('current'));
+  btnSendSheetsAll.addEventListener('click', () => sendSheets('all'));
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === 'rows-updated' || msg?.type === 'status-updated') {
@@ -229,6 +240,39 @@ async function saveAutomation() {
       scanIntervalSec: parseInt(scanInterval.value, 10) || 90
     }
   });
+}
+
+/* ===== Google Sheets / Webhook ===== */
+
+async function loadSheetsConfig() {
+  const cfg = await chrome.runtime.sendMessage({ type: 'get-sheets-config' }).catch(()=>null);
+  if (!cfg) return;
+  sheetsUrl.value = cfg.url || '';
+  sheetsApiKey.value = cfg.apiKey || '';
+}
+
+async function saveSheetsConfig() {
+  try {
+    await chrome.runtime.sendMessage({
+      type: 'save-sheets-config',
+      payload: { url: sheetsUrl.value, apiKey: sheetsApiKey.value }
+    });
+  } catch (e) {
+    const msg = 'No se pudo guardar: ' + (e?.message || e);
+    console.error(msg);
+    statusInfo.textContent = msg;
+  }
+}
+
+async function sendSheets(scope) {
+  try {
+    await chrome.runtime.sendMessage({ type: 'push-to-sheets', scope });
+    await refreshStatus();
+  } catch (e) {
+    const msg = 'No se pudo enviar a Sheets: ' + (e?.message || e);
+    console.error(msg);
+    statusInfo.textContent = msg;
+  }
 }
 
 /* ===== Roles y reglas ===== */

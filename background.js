@@ -13,6 +13,9 @@ const HEADERS = [
   'Estado',
   'Fuente'
 ];
+const SHEETS_TIMEOUT_MS = 15000;
+const PHONE_MIN_DIGITS = 7;
+const PHONE_MAX_DIGITS = 11;
 
 const DEFAULT_STATE = {
   roles: ['DOMICILIARIOS', 'CONDUCTORES', 'AUXILIARES CARGA Y DESCARGA', 'DELIVERY'],
@@ -29,7 +32,9 @@ const DEFAULT_STATE = {
   queue: [],
   autoMode: 'off',                  // off | capture-on-open | scan-and-process
   scanIntervalSec: 90,
-  holdProcessing: false             // detener procesamiento indefinidamente
+  holdProcessing: false,            // detener procesamiento indefinidamente
+  sheetsWebhookUrl: '',
+  sheetsApiKey: ''
 };
 
 const FIXED_RULES = {
@@ -172,6 +177,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse(await getAutomationConfig()); return;
         case 'save-automation-config':
           await saveAutomationConfig(msg.payload); sendResponse({ ok: true }); return;
+
+        // Google Sheets / Webhook
+        case 'get-sheets-config':
+          sendResponse(await getSheetsConfig()); return;
+        case 'save-sheets-config':
+          await saveSheetsConfig(msg.payload); sendResponse({ ok: true }); return;
+        case 'push-to-sheets':
+          sendResponse(await pushToSheets(msg.scope)); return;
 
         // Roles: eliminar / renombrar
         case 'delete-role':
@@ -395,6 +408,106 @@ async function scheduleAutoAlarm() {
   if (st.autoMode !== 'scan-and-process') return;
   const minutes = Math.max(1, Math.round((st.scanIntervalSec || 90) / 60));
   chrome.alarms.create('auto-scan', { periodInMinutes: minutes });
+}
+
+/* ==========================
+   Google Sheets / Webhook
+   ========================== */
+
+async function getSheetsConfig() {
+  const st = await chrome.storage.local.get(['sheetsWebhookUrl', 'sheetsApiKey']);
+  return {
+    url: st.sheetsWebhookUrl || '',
+    apiKey: st.sheetsApiKey || ''
+  };
+}
+
+async function saveSheetsConfig({ url, apiKey }) {
+  const cleanUrl = (url || '').trim();
+  if (cleanUrl) {
+    let parsed;
+    try {
+      parsed = new URL(cleanUrl);
+    } catch (e) {
+      if (e instanceof TypeError) {
+        throw new Error('Invalid webhook URL format. Please provide a valid URL.');
+      }
+      throw e;
+    }
+    if (parsed.protocol !== 'https:') throw new Error('Use HTTPS for the webhook.');
+  }
+  await chrome.storage.local.set({
+    sheetsWebhookUrl: cleanUrl,
+    sheetsApiKey: (apiKey || '').trim()
+  });
+  toast('Configuración de Google Sheets guardada.', 'ok');
+}
+
+async function pushToSheets(scope = 'current') {
+  const cfg = await getSheetsConfig();
+  if (!cfg.url) throw new Error('Configura la URL/Webhook de Google Sheets.');
+
+  const payload = await buildSheetsPayload(scope);
+  if (!payload.rows.length) {
+    toast('No hay datos válidos para enviar a Sheets.', 'warn');
+    return { ok: false, sent: 0 };
+  }
+
+  const headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+  if (cfg.apiKey) headers['X-Api-Key'] = cfg.apiKey;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SHEETS_TIMEOUT_MS);
+  const res = await fetch(cfg.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    mode: 'cors',
+    credentials: 'omit',
+    signal: controller.signal
+  });
+  clearTimeout(timer);
+  if (!res.ok) throw new Error(`Sheets respondió ${res.status}`);
+  const json = await tryParseJson(res);
+  if (json && json.ok === false) {
+    throw new Error(json.message || 'Sheets rechazó la solicitud.');
+  }
+  toast(`Enviadas ${payload.rows.length} filas a Sheets (${scope}).`, 'ok');
+  return { ok: true, sent: payload.rows.length };
+}
+
+async function buildSheetsPayload(scope = 'current') {
+  const st = await chrome.storage.local.get(['dataByRole', 'currentRole', 'roles']);
+  const map = st.dataByRole || {};
+  const roles = st.roles || [];
+  const payloadRows = [];
+
+  if (scope === 'all') {
+    for (const r of roles) {
+      const rows = (map[r] || []).map(ensureRowShape).filter(isRowValid).map(x => ({ Rol: r, ...x }));
+      payloadRows.push(...rows);
+    }
+  } else {
+    const role = st.currentRole;
+    const rows = (map[role] || []).map(ensureRowShape).filter(isRowValid).map(x => ({ Rol: role, ...x }));
+    payloadRows.push(...rows);
+  }
+
+  const snap = await getPendingSnapshotForCurrentTab();
+  if (snap && isRowValid(snap)) payloadRows.push({ Rol: st.currentRole, ...snap });
+
+  const merged = dedupeByDocEmail(payloadRows);
+  return {
+    scope,
+    role: st.currentRole,
+    exportedAt: new Date().toISOString(),
+    rows: merged
+  };
+}
+
+async function tryParseJson(res) {
+  try { return await res.json(); }
+  catch (e) { console.warn('Google Sheets webhook returned invalid JSON response', e); return null; }
 }
 
 /* ==========================
@@ -837,22 +950,26 @@ function decideByRules(role, row, customRules) {
    ========================== */
 
 async function saveRow(row) {
-  if (!row.Fecha) row.Fecha = formatDateShort(new Date());
-  if (/^\s*oferta\b/i.test(row.Candidato || '')) return;
+  const shaped = ensureRowShape(row);
+  if (!isRowValid(shaped)) {
+    toast('Fila descartada: falta contacto o nombre.', 'warn');
+    return;
+  }
+  if (/^\s*oferta\b/i.test(shaped.Candidato || '')) return;
 
   const st = await chrome.storage.local.get(['dataByRole', 'currentRole']);
   const role = st.currentRole;
   const map = st.dataByRole || {};
   const rows = map[role] || [];
-  const doc = (row.Documento || '').toString().trim();
-  const email = (row.Email || '').toLowerCase().trim();
+  const doc = (shaped.Documento || '').toString().trim();
+  const email = (shaped.Email || '').toLowerCase().trim();
 
   let exists = false;
   if (doc) exists = rows.some(r => (r.Documento || '').toString().trim() === doc);
   else if (email) exists = rows.some(r => (r.Email || '').toLowerCase().trim() === email);
 
   if (!exists) {
-    map[role] = [...rows, row];
+    map[role] = [...rows, shaped];
     await chrome.storage.local.set({ dataByRole: map });
   }
 }
@@ -887,6 +1004,15 @@ function dedupeByDocEmail(rows) {
   return out;
 }
 
+function isRowValid(r) {
+  const nameOk = (r.Candidato || '').trim().length >= 2;
+  const phoneDigits = (r.Telefono || '').replace(/\D/g, '');
+  const phoneOk = phoneDigits.length >= PHONE_MIN_DIGITS && phoneDigits.length <= PHONE_MAX_DIGITS;
+  const email = (r.Email || '').trim();
+  const emailOk = email ? /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email) : false;
+  return nameOk && (phoneOk || emailOk);
+}
+
 // Snapshot de la ficha en curso (se intenta siempre; dedupe evitará duplicados)
 async function getPendingSnapshotForCurrentTab() {
   const tab = await getActiveTab();
@@ -906,9 +1032,9 @@ async function exportCsvOfCurrentRole() {
   const role = st.currentRole;
   const rows = (st.dataByRole || {})[role] || [];
 
-  const outRows = rows.map(ensureRowShape);
+  const outRows = rows.map(ensureRowShape).filter(isRowValid);
   const snap = await getPendingSnapshotForCurrentTab();
-  if (snap) outRows.push(snap);
+  if (snap && isRowValid(snap)) outRows.push(snap);
 
   const merged = dedupeByDocEmail(outRows);
   if (!merged.length) { toast('No hay datos.', 'warn'); return; }
@@ -928,9 +1054,9 @@ async function exportXlsOfCurrentRole() {
   const role = st.currentRole || 'Hoja';
   const rows = (st.dataByRole || {})[role] || [];
 
-  const outRows = rows.map(ensureRowShape);
+  const outRows = rows.map(ensureRowShape).filter(isRowValid);
   const snap = await getPendingSnapshotForCurrentTab();
-  if (snap) outRows.push(snap);
+  if (snap && isRowValid(snap)) outRows.push(snap);
 
   const merged = dedupeByDocEmail(outRows);
   if (!merged.length) { toast('No hay datos.', 'warn'); return; }
@@ -957,11 +1083,11 @@ async function exportAllCsv() {
 
   const all = [];
   for (const r of roles) {
-    const shaped = (map[r] || []).map(ensureRowShape).map(x => ({ Rol: r, ...x }));
+    const shaped = (map[r] || []).map(ensureRowShape).filter(isRowValid).map(x => ({ Rol: r, ...x }));
     all.push(...shaped);
   }
   const snap = await getPendingSnapshotForCurrentTab();
-  if (snap) all.push({ Rol: st.currentRole, ...snap });
+  if (snap && isRowValid(snap)) all.push({ Rol: st.currentRole, ...snap });
 
   const merged = dedupeByDocEmail(all);
   if (!merged.length) { toast('No hay datos.', 'warn'); return; }
@@ -985,11 +1111,11 @@ async function exportAllXls() {
 
   const all = [];
   for (const r of roles) {
-    const shaped = (map[r] || []).map(ensureRowShape).map(x => ({ Rol: r, ...x }));
+    const shaped = (map[r] || []).map(ensureRowShape).filter(isRowValid).map(x => ({ Rol: r, ...x }));
     all.push(...shaped);
   }
   const snap = await getPendingSnapshotForCurrentTab();
-  if (snap) all.push({ Rol: st.currentRole, ...snap });
+  if (snap && isRowValid(snap)) all.push({ Rol: st.currentRole, ...snap });
 
   const merged = dedupeByDocEmail(all);
   if (!merged.length) { toast('No hay datos.', 'warn'); return; }
