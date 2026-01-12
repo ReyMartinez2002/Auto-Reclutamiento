@@ -426,8 +426,14 @@ async function saveSheetsConfig({ url, apiKey }) {
   const cleanUrl = (url || '').trim();
   if (cleanUrl) {
     let parsed;
-    try { parsed = new URL(cleanUrl); }
-    catch (e) { if (e instanceof TypeError) throw new Error('Invalid webhook URL format. Please provide a valid URL.'); else throw e; }
+    try {
+      parsed = new URL(cleanUrl);
+    } catch (e) {
+      if (e instanceof TypeError) {
+        throw new Error('Invalid webhook URL format. Please provide a valid URL.');
+      }
+      throw e;
+    }
     if (parsed.protocol !== 'https:') throw new Error('Use HTTPS for the webhook.');
   }
   await chrome.storage.local.set({
@@ -462,8 +468,7 @@ async function pushToSheets(scope = 'current') {
   });
   clearTimeout(timer);
   if (!res.ok) throw new Error(`Sheets respondió ${res.status}`);
-  let json = null;
-  try { json = await res.json(); } catch (e) { console.warn('Google Sheets webhook returned invalid JSON response', e); }
+  const json = await tryParseJson(res);
   if (json && json.ok === false) {
     throw new Error(json.message || 'Sheets rechazó la solicitud.');
   }
@@ -498,6 +503,11 @@ async function buildSheetsPayload(scope = 'current') {
     exportedAt: new Date().toISOString(),
     rows: merged
   };
+}
+
+async function tryParseJson(res) {
+  try { return await res.json(); }
+  catch (e) { console.warn('Google Sheets webhook returned invalid JSON response', e); return null; }
 }
 
 /* ==========================
@@ -997,7 +1007,7 @@ function dedupeByDocEmail(rows) {
 function isRowValid(r) {
   const nameOk = (r.Candidato || '').trim().length >= 2;
   const phoneDigits = (r.Telefono || '').replace(/\D/g, '');
-  const phoneOk = !!phoneDigits && phoneDigits.length >= PHONE_MIN_DIGITS && phoneDigits.length <= PHONE_MAX_DIGITS;
+  const phoneOk = phoneDigits.length >= PHONE_MIN_DIGITS && phoneDigits.length <= PHONE_MAX_DIGITS;
   const email = (r.Email || '').trim();
   const emailOk = email ? /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email) : false;
   return nameOk && (phoneOk || emailOk);
