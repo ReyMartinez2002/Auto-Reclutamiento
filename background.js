@@ -421,8 +421,10 @@ async function getSheetsConfig() {
 
 async function saveSheetsConfig({ url, apiKey }) {
   const cleanUrl = (url || '').trim();
-  if (cleanUrl && !/^https?:\/\/.+/i.test(cleanUrl)) {
-    throw new Error('URL inválida: debe empezar por http(s).');
+  if (cleanUrl) {
+    let parsed;
+    try { parsed = new URL(cleanUrl); } catch { throw new Error('URL inválida.'); }
+    if (parsed.protocol !== 'https:') throw new Error('Usa HTTPS para el webhook.');
   }
   await chrome.storage.local.set({
     sheetsWebhookUrl: cleanUrl,
@@ -444,13 +446,17 @@ async function pushToSheets(scope = 'current') {
   const headers = { 'Content-Type': 'application/json' };
   if (cfg.apiKey) headers['X-Api-Key'] = cfg.apiKey;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
   const res = await fetch(cfg.url, {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
     mode: 'cors',
-    credentials: 'omit'
+    credentials: 'omit',
+    signal: controller.signal
   });
+  clearTimeout(timer);
   if (!res.ok) throw new Error(`Sheets respondió ${res.status}`);
   let json = null;
   try { json = await res.json(); } catch {}
@@ -479,7 +485,7 @@ async function buildSheetsPayload(scope = 'current') {
   }
 
   const snap = await getPendingSnapshotForCurrentTab();
-  if (snap) payloadRows.push({ Rol: st.currentRole, ...snap });
+  if (snap && isRowValid(snap)) payloadRows.push({ Rol: st.currentRole, ...snap });
 
   const merged = dedupeByDocEmail(payloadRows);
   return {
