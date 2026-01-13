@@ -14,7 +14,8 @@
   ],
   "host_permissions": [
     "https://empresa.co.computrabajo.com/*",
-    "https://*.computrabajo.com/*"
+    "https://*.computrabajo.com/*",
+    "https://script.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -25,7 +26,10 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.computrabajo.com/*", "https://empresa.co.computrabajo.com/*"],
+      "matches": [
+        "https://*.computrabajo.com/*",
+        "https://empresa.co.computrabajo.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
