@@ -40,6 +40,15 @@ const DEFAULT_STATE = {
   holdProcessing: false, // detener procesamiento indefinidamente
   sheetsWebhookUrl: "",
   sheetsApiKey: "",
+  simulateMode: false, // NUEVO: modo simulación
+};
+
+const DEFAULT_STATS = {
+  // NUEVO: estructura básica de stats
+  totalCaptured: 0,
+  totalSelected: 0,
+  totalDiscarded: 0,
+  totalErrors: 0,
 };
 
 const FIXED_RULES = {
@@ -155,10 +164,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "toggle-pause":
           await togglePause();
           break;
-        case "cancel-processing": // NUEVO
+        case "cancel-processing":
           await cancelProcessing();
           break;
-        case "resume-processing": // NUEVO
+        case "resume-processing":
           await resumeProcessing();
           break;
 
@@ -168,10 +177,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "export-xls":
           await exportXlsOfCurrentRole();
           break;
-        case "export-all-csv": // NUEVO
+        case "export-all-csv":
           await exportAllCsv();
           break;
-        case "export-all-xls": // NUEVO
+        case "export-all-xls":
           await exportAllXls();
           break;
 
@@ -269,6 +278,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await importBackup(msg.payload);
           sendResponse({ ok: true });
           return;
+
+        // Modo simulación (desde popup; lo usaremos luego en popup.js)
+        case "set-simulate-mode":
+          await chrome.storage.local.set({ simulateMode: !!msg.value });
+          sendResponse({ ok: true });
+          return;
+
+        // Warning de DOM roto
+        case "dom-structure-warning": {
+          const stWarn = await chrome.storage.local.get(["domWarning"]);
+          const domWarning = {
+            lastUrl: msg.url || "",
+            lastAt: new Date().toISOString(),
+            count: (stWarn.domWarning?.count || 0) + 1,
+          };
+          await chrome.storage.local.set({ domWarning });
+          return;
+        }
 
         case "gender-selected": {
           const { id, gender, firstName } = msg;
@@ -412,7 +439,7 @@ async function saveGenderConfig({
   if (overridesText) {
     overridesText.split(/\r?\n/).forEach((line) => {
       const l = line.trim();
-      if (!l || l.startsWith("#")) return;
+      if (!l || l.startswith?.("#") || l.startsWith("#")) return;
       const m = l.match(/^([a-zA-ZÁÉÍÓÚÜÑáéíóúüñ]+)\s*=\s*([MFmf])$/);
       if (m) {
         const name = normalizeFirstName(m[1]);
@@ -425,7 +452,7 @@ async function saveGenderConfig({
   if (dictText) {
     dictText.split(/\r?\n/).forEach((line) => {
       const l = line.trim();
-      if (!l || l.startsWith("#")) return;
+      if (!l || l.startswith?.("#") || l.startsWith("#")) return;
       const m = l.match(/^([a-zA-ZÁÉÍÓÚÜÑáéíóúüñ]+)\s*=\s*([MFmf])$/);
       if (m) {
         const name = normalizeFirstName(m[1]);
@@ -453,7 +480,7 @@ async function saveGenderDict({ dictText }) {
   if (dictText) {
     dictText.split(/\r?\n/).forEach((line) => {
       const l = line.trim();
-      if (!l || l.startsWith("#")) return;
+      if (!l || l.startswith?.("#") || l.startsWith("#")) return;
       const m = l.match(/^([a-zA-ZÁÉÍÓÚÜÑáéíóúüñ]+)\s*=\s*([MFmf])$/);
       if (m) {
         const name = normalizeFirstName(m[1]);
@@ -534,7 +561,6 @@ async function saveSheetsConfig({ url, apiKey }) {
   toast("Configuración de Google Sheets guardada.", "ok");
 }
 
-// IMPORTANTE: esta versión añade la API key como query param (?apiKey=...)
 // IMPORTANTE: versión sin CORS avanzado, pensada para MV3 + Apps Script
 async function pushToSheets(scope = "current") {
   const cfg = await getSheetsConfig();
@@ -565,7 +591,6 @@ async function pushToSheets(scope = "current") {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-      // NO pongas mode: 'cors' ni credentials aquí
       signal: controller.signal,
     });
   } catch (e) {
@@ -585,7 +610,7 @@ async function pushToSheets(scope = "current") {
   }
 
   toast(`Enviadas ${payload.rows.length} filas a Sheets (${scope}).`, "ok");
-  return { ok: true, sent: payload.rows.length };
+  return { ok: true, sent: 0 };
 }
 
 async function buildSheetsPayload(scope = "current") {
@@ -636,7 +661,6 @@ async function tryParseJson(res) {
     return null;
   }
 }
-
 /* ==========================
    Roles: eliminar / renombrar
    ========================== */
@@ -1035,7 +1059,6 @@ async function processLoop() {
     notifyStatusUpdated();
 
     try {
-      // Navegación y extracción robustas: crea pestaña si no existe la activa
       const row = await navigateAndExtract(url);
       if (!row || !row.Candidato) {
         toast("No válido, salto.", "warn");
@@ -1096,7 +1119,6 @@ async function ensureGender(row, tabId) {
   if (mode === "auto") return { ...row, Genero: inferred };
   if (mode === "hybrid" && inferred) return { ...row, Genero: inferred };
 
-  // Si no hay tabId válido, no mostramos prompt (mantener flujo)
   if (!(await tabExists(tabId))) return { ...row, Genero: inferred || "" };
 
   const chosen = await promptGenderOnPage(tabId, first, inferred);
@@ -1145,7 +1167,6 @@ async function decideAndOptionallyClick(tabId, row, estadoMode) {
   else if (estadoMode === "manual-descartados") target = "Descartados";
   else target = decideByRules(role, row, st.customRules || {});
 
-  // Intentar click solo si hay pestaña válida
   if (await tabExists(tabId)) {
     try {
       const ok = await safeExecuteScript(
@@ -1193,7 +1214,15 @@ async function decideAndOptionallyClick(tabId, row, estadoMode) {
     }
   }
 
-  return { ...row, Estado: target };
+  // AQUÍ SOLO CAMBIAMOS LO QUE SE GUARDA EN EL ESTADO (Sheet)
+  let estadoGuardado = target;
+  if (/^seleccionad/i.test(target)) {
+    estadoGuardado = "Seleccionado";
+  } else if (/^descartad/i.test(target)) {
+    estadoGuardado = "Descartado";
+  }
+
+  return { ...row, Estado: estadoGuardado };
 }
 
 function decideByRules(role, row, customRules) {
@@ -1226,7 +1255,7 @@ function decideByRules(role, row, customRules) {
    Storage / export
    ========================== */
 
-let sheetsPushTimer = null; // NUEVO: para auto push a Sheets
+let sheetsPushTimer = null;
 
 async function saveRow(row) {
   const shaped = ensureRowShape(row);
@@ -1253,7 +1282,6 @@ async function saveRow(row) {
     map[role] = [...rows, shaped];
     await chrome.storage.local.set({ dataByRole: map });
 
-    // Auto-enviar a Sheets (rol actual) con debounce
     try {
       if (sheetsPushTimer) clearTimeout(sheetsPushTimer);
       sheetsPushTimer = setTimeout(() => {
@@ -1463,6 +1491,19 @@ async function exportAllXls() {
 }
 
 function ensureRowShape(r) {
+  // Normalizar nombre: "JUAN perez LOPEZ" -> "Juan Perez Lopez"
+  const normalizeName = (name) => {
+    const s = (name || "").toLowerCase().trim();
+    if (!s) return "";
+    return s
+      .split(/\s+/)
+      .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : ""))
+      .join(" ");
+  };
+
+  // Normalizar email: quitar espacios, pasar a minúsculas
+  const normalizeEmail = (email) => (email || "").trim().toLowerCase();
+
   let tel = (r.Telefono || "").toString();
   const digitsList = tel
     .split(/[\/|,]/)
@@ -1481,12 +1522,12 @@ function ensureRowShape(r) {
   }
 
   return {
-    Candidato: r.Candidato || "",
+    Candidato: normalizeName(r.Candidato || ""),
     Documento: (r.Documento || "").toString(),
     Telefono: telOut,
     Edad: (r.Edad || "").toString(),
     Genero: (r.Genero || "").toString(),
-    Email: r.Email || "",
+    Email: normalizeEmail(r.Email || ""),
     Fecha: fecha,
     Estado: r.Estado || "",
     Fuente: r.Fuente || "",
