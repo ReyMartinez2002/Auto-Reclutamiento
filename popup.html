@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Auto Reclutamiento</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <!-- TOP BAR (sticky) -->
+    <header class="topbar">
+      <div class="topbar__title">
+        <h1>Auto Reclutamiento</h1>
+        <p class="sub">Computrabajo → Google Sheets</p>
+      </div>
+
+      <div class="topbar__status">
+        <span class="badge" id="statusBadge">Inactivo</span>
+        <div class="statusMini" id="statusInfo"></div>
+      </div>
+    </header>
+
+    <!-- SCROLL INTERNO -->
+    <div class="scrollArea">
+      <main class="layout">
+        <!-- ===== Columna izquierda ===== -->
+        <section class="card">
+          <div class="card__head">
+            <h2>Rol</h2>
+            <button
+              class="iconBtn"
+              id="btnRefreshRules"
+              title="Refrescar reglas"
+              aria-label="Refrescar reglas"
+              type="button"
+            >
+              ⟳
+            </button>
+          </div>
+
+          <div class="field">
+            <label class="lbl">Rol actual</label>
+
+            <!-- Custom Select: roleSelect -->
+            <div class="cSelect" data-select>
+              <button class="cSelect__btn" type="button" data-select-btn>
+                <span class="cSelect__label" data-select-label>Cargando...</span>
+                <span class="cSelect__chev">▾</span>
+              </button>
+
+              <div class="cSelect__menu" data-select-menu hidden></div>
+
+              <!-- Select real (oculto) -->
+              <select id="roleSelect" hidden data-native-select></select>
+            </div>
+
+            <p class="muted" id="rulesInfo"></p>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="field">
+            <label class="lbl">Nuevo rol</label>
+            <div class="row">
+              <input id="roleCustom" placeholder="Ej: DOMICILIARIOS FDS" />
+              <button class="btn primary" id="btnAddRole" type="button">
+                Añadir
+              </button>
+            </div>
+          </div>
+
+          <details class="details">
+            <summary>Administrar roles</summary>
+            <div class="details__body">
+              <div class="field">
+                <label class="lbl">Renombrar</label>
+                <div class="row">
+                  <input
+                    type="text"
+                    id="newRoleName"
+                    placeholder="Nuevo nombre"
+                  />
+                  <button class="btn" id="btnRenameRole" type="button">
+                    Renombrar
+                  </button>
+                </div>
+              </div>
+
+              <div class="field">
+                <label class="lbl">Eliminar</label>
+                <button class="btn danger w100" id="btnDeleteRole" type="button">
+                  Eliminar rol actual
+                </button>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="card">
+          <div class="card__head">
+            <h2>Acciones</h2>
+            <span class="hintChip">rápido</span>
+          </div>
+
+          <div class="actionsGrid">
+            <button class="btn" id="btnCapture" type="button">
+              Capturar ficha
+            </button>
+            <button class="btn primary" id="btnProcessList" type="button">
+              Procesar lista
+            </button>
+            <button class="btn" id="btnTogglePause" type="button">Pausar</button>
+            <button class="btn danger" id="btnCancelProcessing" type="button">
+              Detener
+            </button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="actionsGrid">
+            <button class="btn" id="btnExport" type="button">CSV</button>
+            <button class="btn" id="btnExportXls" type="button">Excel</button>
+            <button class="btn" id="btnExportAllCsv" type="button">
+              Todo (CSV)
+            </button>
+            <button class="btn" id="btnExportAllXls" type="button">
+              Todo (Excel)
+            </button>
+          </div>
+
+          <div class="divider"></div>
+
+          <button class="btn ghost w100" id="btnClear" type="button">
+            Vaciar rol
+          </button>
+
+          <p id="domWarningInfo" class="warnText"></p>
+        </section>
+
+        <!-- ===== Columna derecha ===== -->
+        <section class="card">
+          <div class="card__head">
+            <h2>Sheets</h2>
+            <span class="hintChip">sync</span>
+          </div>
+
+          <div class="field">
+            <label class="lbl">URL del endpoint</label>
+            <input
+              type="url"
+              id="sheetsUrl"
+              placeholder="https://script.google.com/macros/s/.../exec"
+            />
+          </div>
+
+          <div class="field">
+            <label class="lbl">API key (opcional)</label>
+            <input type="text" id="sheetsApiKey" placeholder="?apiKey=..." />
+          </div>
+
+          <div class="row wrap">
+            <button class="btn primary" id="btnSaveSheets" type="button">
+              Guardar
+            </button>
+            <button class="btn" id="btnSendSheets" type="button">
+              Enviar rol
+            </button>
+            <button class="btn" id="btnSendSheetsAll" type="button">
+              Enviar todo
+            </button>
+          </div>
+
+          <p class="muted">
+            Si procesas muchos candidatos, la extensión reintenta envíos
+            automáticamente.
+          </p>
+        </section>
+
+        <section class="card">
+          <div class="card__head">
+            <h2>Automatización</h2>
+          </div>
+
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Modo</label>
+
+              <!-- Custom Select: autoMode -->
+              <div class="cSelect" data-select>
+                <button class="cSelect__btn" type="button" data-select-btn>
+                  <span class="cSelect__label" data-select-label
+                    >Selecciona…</span
+                  >
+                  <span class="cSelect__chev">▾</span>
+                </button>
+                <div class="cSelect__menu" data-select-menu hidden></div>
+
+                <select id="autoMode" hidden data-native-select>
+                  <option value="off">Apagado</option>
+                  <option value="capture-on-open">Capturar al abrir fichas</option>
+                  <option value="scan-and-process">Escanear listas y procesar</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="lbl">Intervalo (seg)</label>
+              <input type="number" id="scanInterval" min="30" value="90" />
+            </div>
+          </div>
+
+          <button class="btn primary w100" id="btnSaveAuto" type="button">
+            Guardar automatización
+          </button>
+
+          <div class="divider"></div>
+
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Modo de estado</label>
+
+              <!-- Custom Select: estadoMode -->
+              <div class="cSelect" data-select>
+                <button class="cSelect__btn" type="button" data-select-btn>
+                  <span class="cSelect__label" data-select-label
+                    >Selecciona…</span
+                  >
+                  <span class="cSelect__chev">▾</span>
+                </button>
+                <div class="cSelect__menu" data-select-menu hidden></div>
+
+                <select id="estadoMode" hidden data-native-select>
+                  <option value="auto">Auto (usar reglas)</option>
+                  <option value="manual-seleccionados">Forzar Seleccionados</option>
+                  <option value="manual-descartados">Forzar Descartados</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="lbl">Preferencias</label>
+              <label class="toggle">
+                <input type="checkbox" id="inferGender" checked />
+                <span>Inferir género</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" id="simulateMode" />
+                <span>Modo simulación</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card__head">
+            <h2>Género</h2>
+          </div>
+
+          <div class="field">
+            <label class="lbl">Modo</label>
+
+            <!-- Custom Select: genderMode -->
+            <div class="cSelect" data-select>
+              <button class="cSelect__btn" type="button" data-select-btn>
+                <span class="cSelect__label" data-select-label
+                  >Selecciona…</span
+                >
+                <span class="cSelect__chev">▾</span>
+              </button>
+              <div class="cSelect__menu" data-select-menu hidden></div>
+
+              <select id="genderMode" hidden data-native-select>
+                <option value="auto">Auto (no preguntar)</option>
+                <option value="prompt">Preguntar siempre</option>
+                <option value="hybrid">Híbrido</option>
+              </select>
+            </div>
+          </div>
+
+          <details class="details" open>
+            <summary>Diccionario (usuario)</summary>
+            <div class="details__body">
+              <textarea
+                id="dictText"
+                rows="6"
+                placeholder="catalina=F&#10;fernando=M"
+              ></textarea>
+
+              <div class="row wrap">
+                <button class="btn primary" id="btnSaveDict" type="button">
+                  Guardar
+                </button>
+                <button class="btn danger" id="btnClearDict" type="button">
+                  Limpiar
+                </button>
+              </div>
+
+              <div class="row wrap">
+                <button class="btn" id="btnExportDict" type="button">
+                  Exportar
+                </button>
+                <input
+                  type="file"
+                  id="fileImportDict"
+                  accept=".txt,.csv,text/plain"
+                  style="display: none"
+                />
+                <button class="btn" id="btnImportDict" type="button">
+                  Importar
+                </button>
+
+                <label class="toggle inline">
+                  <input type="checkbox" id="chkMergeDict" checked />
+                  <span>Fusionar</span>
+                </label>
+              </div>
+
+              <p class="muted">
+                Exporta Base+Usuario+Overrides. Al importar puedes fusionar o
+                reemplazar (según el checkbox).
+              </p>
+            </div>
+          </details>
+
+          <details class="details">
+            <summary>Overrides (auto-guardados)</summary>
+            <div class="details__body">
+              <textarea
+                id="overridesText"
+                rows="5"
+                placeholder="juan=M&#10;maria=F"
+              ></textarea>
+              <div class="row wrap">
+                <button class="btn primary" id="btnSaveGender" type="button">
+                  Guardar
+                </button>
+                <button
+                  class="btn danger"
+                  id="btnClearOverrides"
+                  type="button"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="card">
+          <div class="card__head">
+            <h2>Regla personalizada</h2>
+          </div>
+
+          <div class="grid2">
+            <div class="field">
+              <label class="lbl">Edad mín</label>
+              <input type="number" id="ageMin" min="0" value="18" />
+            </div>
+
+            <div class="field">
+              <label class="lbl">Edad máx</label>
+              <input type="number" id="ageMax" min="0" value="50" />
+            </div>
+          </div>
+
+          <div class="chips">
+            <label class="chip">
+              <input type="checkbox" class="gchk" value="M" checked />
+              Hombre
+            </label>
+            <label class="chip">
+              <input type="checkbox" class="gchk" value="F" />
+              Mujer
+            </label>
+          </div>
+
+          <div class="row wrap">
+            <button class="btn primary" id="btnSaveRule" type="button">
+              Guardar
+            </button>
+            <button class="btn danger" id="btnDeleteRule" type="button">
+              Eliminar
+            </button>
+          </div>
+
+          <p class="muted">
+            La regla personalizada reemplaza la regla fija del rol.
+          </p>
+        </section>
+
+        <section class="card">
+          <div class="card__head">
+            <h2>Backup</h2>
+          </div>
+
+          <div class="row wrap">
+            <button class="btn" id="btnExportBackup" type="button">
+              Exportar JSON
+            </button>
+
+            <input
+              type="file"
+              id="fileImportBackup"
+              accept=".json,application/json"
+              style="display: none"
+            />
+            <button class="btn" id="btnImportBackup" type="button">
+              Importar
+            </button>
+          </div>
+
+          <p class="muted">
+            Incluye roles, reglas, modos y diccionario. Útil para migrar entre
+            equipos.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
