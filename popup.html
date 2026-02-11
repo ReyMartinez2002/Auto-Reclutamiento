@@ -7,233 +7,263 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <header>
-      <h1>Reclutamiento</h1>
-      <span class="badge" id="statusBadge">Inactivo</span>
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar__title">
+        <h1>Auto Reclutamiento</h1>
+        <p class="sub">Computrabajo → Google Sheets</p>
+      </div>
+      <div class="topbar__status">
+        <span class="badge" id="statusBadge">Inactivo</span>
+        <div class="statusMini" id="statusInfo"></div>
+      </div>
     </header>
 
-    <section class="block">
-      <label class="lbl">Rol actual</label>
-      <div class="row gap">
-        <select id="roleSelect"></select>
-        <button class="sm" id="btnRefreshRules" title="Refrescar reglas">
-          ⟳
-        </button>
-      </div>
-      <div class="row gap mt4">
-        <input id="roleCustom" placeholder="Nuevo rol..." />
-        <button class="sm primary" id="btnAddRole">Añadir</button>
-      </div>
-      <div class="inline-actions">
-        <input type="text" id="newRoleName" placeholder="Nuevo nombre rol" />
-        <button class="sm" id="btnRenameRole" title="Renombrar rol">
-          Renombrar
-        </button>
-        <button class="sm danger" id="btnDeleteRole" title="Eliminar rol">
-          Eliminar
-        </button>
-      </div>
-      <p class="rules" id="rulesInfo"></p>
-    </section>
+    <main class="layout">
+      <!-- Columna izquierda -->
+      <section class="card">
+        <div class="card__head">
+          <h2>Rol</h2>
+          <button class="iconBtn" id="btnRefreshRules" title="Refrescar reglas" aria-label="Refrescar reglas">
+            ⟳
+          </button>
+        </div>
 
-    <section class="block">
-      <h2>Automatización</h2>
-      <div class="grid2">
-        <div>
-          <label class="mini">Modo</label>
-          <select id="autoMode">
-            <option value="off">Apagado</option>
-            <option value="capture-on-open">Capturar al abrir fichas</option>
-            <option value="scan-and-process">Escanear listas y procesar</option>
+        <div class="field">
+          <label class="lbl">Rol actual</label>
+          <div class="row">
+            <select id="roleSelect"></select>
+          </div>
+          <p class="muted" id="rulesInfo"></p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label class="lbl">Nuevo rol</label>
+          <div class="row">
+            <input id="roleCustom" placeholder="Ej: DOMICILIARIOS FDS" />
+            <button class="btn primary" id="btnAddRole">Añadir</button>
+          </div>
+        </div>
+
+        <details class="details">
+          <summary>Administrar roles</summary>
+          <div class="details__body">
+            <div class="field">
+              <label class="lbl">Renombrar</label>
+              <div class="row">
+                <input type="text" id="newRoleName" placeholder="Nuevo nombre" />
+                <button class="btn" id="btnRenameRole">Renombrar</button>
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">Eliminar</label>
+              <button class="btn danger w100" id="btnDeleteRole">Eliminar rol actual</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+          <h2>Acciones</h2>
+          <span class="hintChip">rápido</span>
+        </div>
+
+        <div class="actionsGrid">
+          <button class="btn" id="btnCapture">Capturar ficha</button>
+          <button class="btn primary" id="btnProcessList">Procesar lista</button>
+          <button class="btn" id="btnTogglePause">Pausar</button>
+          <button class="btn danger" id="btnCancelProcessing">Detener</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="actionsGrid">
+          <button class="btn" id="btnExport">CSV</button>
+          <button class="btn" id="btnExportXls">Excel</button>
+          <button class="btn" id="btnExportAllCsv">Todo (CSV)</button>
+          <button class="btn" id="btnExportAllXls">Todo (Excel)</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <button class="btn ghost w100" id="btnClear">Vaciar rol</button>
+
+        <p id="domWarningInfo" class="warnText"></p>
+      </section>
+
+      <!-- Columna derecha -->
+      <section class="card">
+        <div class="card__head">
+          <h2>Sheets</h2>
+          <span class="hintChip">sync</span>
+        </div>
+
+        <div class="field">
+          <label class="lbl">URL del endpoint</label>
+          <input type="url" id="sheetsUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+        </div>
+
+        <div class="field">
+          <label class="lbl">API key (opcional)</label>
+          <input type="text" id="sheetsApiKey" placeholder="?apiKey=..." />
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="btnSaveSheets">Guardar</button>
+          <button class="btn" id="btnSendSheets">Enviar rol</button>
+          <button class="btn" id="btnSendSheetsAll">Enviar todo</button>
+        </div>
+
+        <p class="muted">
+          Consejo: si procesas muchos candidatos, la extensión reintenta envíos automáticamente.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+          <h2>Automatización</h2>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="lbl">Modo</label>
+            <select id="autoMode">
+              <option value="off">Apagado</option>
+              <option value="capture-on-open">Capturar al abrir fichas</option>
+              <option value="scan-and-process">Escanear listas y procesar</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl">Intervalo (seg)</label>
+            <input type="number" id="scanInterval" min="30" value="90" />
+          </div>
+        </div>
+
+        <button class="btn primary w100" id="btnSaveAuto">Guardar automatización</button>
+
+        <div class="divider"></div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="lbl">Estado</label>
+            <select id="estadoMode">
+              <option value="auto">Auto (usar reglas)</option>
+              <option value="manual-seleccionados">Forzar Seleccionados</option>
+              <option value="manual-descartados">Forzar Descartados</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="lbl">Preferencias</label>
+            <label class="toggle">
+              <input type="checkbox" id="inferGender" checked />
+              <span>Inferir género</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="simulateMode" />
+              <span>Modo simulación</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+          <h2>Género</h2>
+        </div>
+
+        <div class="field">
+          <label class="lbl">Modo</label>
+          <select id="genderMode">
+            <option value="auto">Auto (no preguntar)</option>
+            <option value="prompt">Preguntar siempre</option>
+            <option value="hybrid">Híbrido</option>
           </select>
         </div>
-        <div>
-          <label class="mini">Intervalo (seg)</label>
-          <input type="number" id="scanInterval" min="30" value="90" />
+
+        <details class="details" open>
+          <summary>Diccionario (usuario)</summary>
+          <div class="details__body">
+            <textarea id="dictText" rows="6" placeholder="catalina=F&#10;fernando=M"></textarea>
+
+            <div class="row">
+              <button class="btn primary" id="btnSaveDict">Guardar</button>
+              <button class="btn danger" id="btnClearDict">Limpiar</button>
+            </div>
+
+            <div class="row wrap">
+              <button class="btn" id="btnExportDict">Exportar</button>
+              <input type="file" id="fileImportDict" accept=".txt,.csv,text/plain" style="display:none" />
+              <button class="btn" id="btnImportDict">Importar</button>
+
+              <label class="toggle inline">
+                <input type="checkbox" id="chkMergeDict" checked />
+                <span>Fusionar</span>
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="details">
+          <summary>Overrides (auto-guardados)</summary>
+          <div class="details__body">
+            <textarea id="overridesText" rows="5" placeholder="juan=M&#10;maria=F"></textarea>
+            <div class="row">
+              <button class="btn primary" id="btnSaveGender">Guardar</button>
+              <button class="btn danger" id="btnClearOverrides">Limpiar</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+          <h2>Regla personalizada</h2>
         </div>
-      </div>
-      <div class="row gap mt8">
-        <button id="btnSaveAuto" class="primary">Guardar automatización</button>
-      </div>
-      <p class="hint">
-        El escaneo periódico usa alarmas (mínimo ~60s). “Capturar al abrir”
-        actúa al cargar una ficha.
-      </p>
-    </section>
 
-    <section class="block">
-      <h2>Google Sheets / Webhook</h2>
-      <label class="mini">URL del endpoint</label>
-      <input
-        type="url"
-        id="sheetsUrl"
-        placeholder="https://script.google.com/macros/s/.../exec"
-      />
-      <label class="mini mt4">Clave/API (opcional)</label>
-      <input
-        type="text"
-        id="sheetsApiKey"
-        placeholder="Clave para ?apiKey=... (opcional)"
-      />
-      <div class="row gap mt8 wrap">
-        <button id="btnSaveSheets" class="primary">Guardar conexión</button>
-        <button id="btnSendSheets">Enviar rol actual</button>
-        <button id="btnSendSheetsAll">Enviar todos los roles</button>
-      </div>
-      <p class="hint">
-        Envía los datos en JSON (rol, filas, fecha). El endpoint debe aceptar
-        POST JSON.
-      </p>
-    </section>
-
-    <section class="block">
-      <h2>Modo de estado</h2>
-      <select id="estadoMode">
-        <option value="auto">Auto (usar reglas)</option>
-        <option value="manual-seleccionados">Forzar Seleccionados</option>
-        <option value="manual-descartados">Forzar Descartados</option>
-      </select>
-      <label class="chk">
-        <input type="checkbox" id="inferGender" checked />
-        <span>Inferir género (para modo auto/hybrid)</span>
-      </label>
-      <label class="chk">
-        <input type="checkbox" id="simulateMode" />
-        <span>Modo simulación (no mover en Computrabajo)</span>
-      </label>
-    </section>
-
-    <section class="block">
-      <h2>Género</h2>
-      <label class="mini">Modo de captura de género</label>
-      <select id="genderMode">
-        <option value="auto">Auto (no preguntar)</option>
-        <option value="prompt">Preguntar siempre</option>
-        <option value="hybrid">Híbrido (pregunta si no se infiere)</option>
-      </select>
-
-      <details class="mt8">
-        <summary class="mini">Overrides (nombre=G)</summary>
-        <textarea
-          id="overridesText"
-          rows="6"
-          placeholder="juan=M&#10;maria=F"
-        ></textarea>
-        <div class="row gap mt8">
-          <button id="btnSaveGender" class="primary">Guardar Overrides</button>
-          <button id="btnClearOverrides" class="danger">Limpiar</button>
+        <div class="grid2">
+          <div class="field">
+            <label class="lbl">Edad mín</label>
+            <input type="number" id="ageMin" min="0" value="18" />
+          </div>
+          <div class="field">
+            <label class="lbl">Edad máx</label>
+            <input type="number" id="ageMax" min="0" value="50" />
+          </div>
         </div>
-        <p class="hint">
-          Los overrides tienen máxima prioridad y se rellenan al confirmar en el
-          prompt.
+
+        <div class="chips">
+          <label class="chip"><input type="checkbox" class="gchk" value="M" checked /> Hombre</label>
+          <label class="chip"><input type="checkbox" class="gchk" value="F" /> Mujer</label>
+        </div>
+
+        <div class="row">
+          <button class="btn primary" id="btnSaveRule">Guardar</button>
+          <button class="btn danger" id="btnDeleteRule">Eliminar</button>
+        </div>
+
+        <p class="muted">La regla personalizada reemplaza la regla fija del rol.</p>
+      </section>
+
+      <section class="card">
+        <div class="card__head">
+          <h2>Backup</h2>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="btnExportBackup">Exportar JSON</button>
+          <input type="file" id="fileImportBackup" accept=".json,application/json" style="display:none" />
+          <button class="btn" id="btnImportBackup">Importar</button>
+        </div>
+
+        <p class="muted">
+          Útil para migrar entre equipos: roles, reglas, modos y diccionario.
         </p>
-      </details>
-
-      <details class="mt8" open>
-        <summary class="mini">
-          Diccionario de nombres (usuario) (nombre=G)
-        </summary>
-        <textarea
-          id="dictText"
-          rows="6"
-          placeholder="catalina=F&#10;fernando=M"
-        ></textarea>
-        <div class="row gap mt8">
-          <button id="btnSaveDict" class="primary">Guardar Diccionario</button>
-          <button id="btnClearDict" class="danger">Limpiar</button>
-        </div>
-        <div class="inline-actions">
-          <button id="btnExportDict">Exportar diccionario completo</button>
-          <input
-            type="file"
-            id="fileImportDict"
-            accept=".txt,.csv,text/plain"
-            style="display: none"
-          />
-          <label class="chk"
-            ><input type="checkbox" id="chkMergeDict" checked />Fusionar al
-            importar</label
-          >
-          <button id="btnImportDict">Importar diccionario</button>
-        </div>
-        <p class="small-note">
-          La exportación incluye Base + Usuario + Overrides (prioridad
-          aplicada).
-        </p>
-      </details>
-    </section>
-
-    <section class="block">
-      <h2>Acciones</h2>
-      <div class="grid">
-        <button id="btnCapture">Capturar ficha</button>
-        <button id="btnProcessList">Procesar lista</button>
-        <button id="btnTogglePause">Pausar</button>
-        <button id="btnCancelProcessing" class="danger">Detener</button>
-        <button id="btnExport">CSV (;)</button>
-        <button id="btnExportXls">Excel</button>
-        <button id="btnExportAllCsv">Exportar TODO (CSV)</button>
-        <button id="btnExportAllXls">Exportar TODO (Excel)</button>
-        <button id="btnClear">Vaciar rol</button>
-      </div>
-      <p id="statusInfo" class="statusLine"></p>
-      <p id="domWarningInfo" class="statusLine"></p>
-    </section>
-
-    <section class="block">
-      <h2>Regla personalizada</h2>
-      <div class="grid2">
-        <div>
-          <label class="mini">Edad mín</label>
-          <input type="number" id="ageMin" min="0" value="18" />
-        </div>
-        <div>
-          <label class="mini">Edad máx</label>
-          <input type="number" id="ageMax" min="0" value="50" />
-        </div>
-      </div>
-      <div class="row wrap g8 mt8">
-        <label class="chip"
-          ><input type="checkbox" class="gchk" value="M" checked /> Hombre
-          (M)</label
-        >
-        <label class="chip"
-          ><input type="checkbox" class="gchk" value="F" /> Mujer (F)</label
-        >
-      </div>
-      <div class="row gap mt8">
-        <button id="btnSaveRule" class="primary">
-          Guardar/Actualizar regla
-        </button>
-        <button id="btnDeleteRule" class="danger">Eliminar regla</button>
-      </div>
-      <p class="hint">La regla personalizada reemplaza la fija del rol.</p>
-    </section>
-
-    <section class="block">
-      <h2>Backup</h2>
-      <div class="inline-actions">
-        <button id="btnExportBackup">Exportar backup (JSON)</button>
-        <input
-          type="file"
-          id="fileImportBackup"
-          accept=".json,application/json"
-          style="display: none"
-        />
-        <button id="btnImportBackup">Importar backup</button>
-      </div>
-      <p class="small-note">
-        El backup incluye roles, reglas, modos y diccionario. Úsalo para migrar
-        entre equipos.
-      </p>
-    </section>
-
-    <footer>
-      <small
-        >Excel 2025 compatible · Verifica la legalidad de filtros por género.
-        Creado por Reynaldo Jose Martinez Fuentes</small
-      >
-    </footer>
+      </section>
+    </main>
 
     <script src="popup.js"></script>
   </body>
