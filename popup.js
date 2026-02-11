@@ -1,6 +1,7 @@
-// Igual al tuyo, con 2 mejoras:
-// - muestra información del outbox de Sheets (pendientes/reintentando)
-// - domWarning ya viene del background actualizado
+// popup.js (ACTUALIZADO)
+// - Convierte TODOS los <select> (roleSelect, autoMode, estadoMode, genderMode) a custom dropdowns.
+// - Mantiene los IDs originales (tu lógica no cambia).
+// - El select nativo queda hidden y el custom select dispara change().
 
 const DEFAULT_ROLES = [
   "DOMICILIARIOS",
@@ -70,6 +71,79 @@ const fileImportBackup = document.getElementById("fileImportBackup");
 
 let lastStatus = null;
 
+/* ==========================
+   Custom Select (genérico)
+   ========================== */
+function initCustomSelects() {
+  document.querySelectorAll("[data-select]").forEach((root) => {
+    const btn = root.querySelector("[data-select-btn]");
+    const label = root.querySelector("[data-select-label]");
+    const menu = root.querySelector("[data-select-menu]");
+    const select = root.querySelector("select[data-native-select]");
+
+    if (!btn || !label || !menu || !select) return;
+
+    const render = () => {
+      menu.innerHTML = "";
+
+      const opts = Array.from(select.options);
+      const selectedValue = select.value;
+
+      const selectedOpt = opts.find((o) => o.value === selectedValue) || opts[0];
+      label.textContent = selectedOpt ? selectedOpt.textContent : "Selecciona…";
+
+      opts.forEach((opt) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "cSelect__opt";
+        b.textContent = opt.textContent;
+        b.setAttribute("aria-selected", opt.value === selectedValue ? "true" : "false");
+
+        b.addEventListener("click", () => {
+          select.value = opt.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          close();
+        });
+
+        menu.appendChild(b);
+      });
+    };
+
+    const open = () => {
+      menu.hidden = false;
+      render();
+      document.addEventListener("click", onOutside, true);
+      document.addEventListener("keydown", onKeyDown, true);
+    };
+
+    const close = () => {
+      menu.hidden = true;
+      document.removeEventListener("click", onOutside, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+
+    const onOutside = (e) => {
+      if (!root.contains(e.target)) close();
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") close();
+    };
+
+    btn.addEventListener("click", () => {
+      if (menu.hidden) open();
+      else close();
+    });
+
+    select.addEventListener("change", () => render());
+
+    render();
+  });
+}
+
+/* ==========================
+   Init
+   ========================== */
 init().catch(console.error);
 
 async function init() {
@@ -83,6 +157,10 @@ async function init() {
   });
 
   fillRoles(st.roles, st.currentRole);
+
+  // Inicializar TODOS los custom selects después de llenar roles
+  initCustomSelects();
+
   inferGender.checked = !!st.inferGender;
   estadoMode.value = st.estadoMode || "auto";
   simulateMode.checked = !!st.simulateMode;
@@ -94,6 +172,7 @@ async function init() {
   await refreshStatus();
   await refreshRulesDescription();
 
+  // ROL: cuando cambie el select (aunque esté oculto), se ejecuta la lógica
   roleSelect.addEventListener("change", async () => {
     await chrome.storage.local.set({ currentRole: roleSelect.value });
     await refreshRulesDescription();
@@ -101,15 +180,23 @@ async function init() {
     loadCustomRuleFields();
   });
 
+  // Otros selects (ocultos) siguen funcionando igual
+  autoMode.addEventListener("change", () => {
+    // no guardamos aquí; se guarda con "Guardar automatización"
+  });
+
+  estadoMode.addEventListener("change", () =>
+    chrome.storage.local.set({ estadoMode: estadoMode.value })
+  );
+
+  genderMode.addEventListener("change", saveGenderConfig);
+
   btnAddRole.addEventListener("click", addRole);
   btnRenameRole.addEventListener("click", renameRole);
   btnDeleteRole.addEventListener("click", deleteRole);
 
   inferGender.addEventListener("change", () =>
     chrome.storage.local.set({ inferGender: inferGender.checked })
-  );
-  estadoMode.addEventListener("change", () =>
-    chrome.storage.local.set({ estadoMode: estadoMode.value })
   );
 
   simulateMode.addEventListener("change", async () => {
@@ -119,12 +206,8 @@ async function init() {
     });
   });
 
-  btnCapture.addEventListener("click", () =>
-    sendBg({ type: "capture-current" })
-  );
-  btnProcessList.addEventListener("click", () =>
-    sendBg({ type: "start-processing-list" })
-  );
+  btnCapture.addEventListener("click", () => sendBg({ type: "capture-current" }));
+  btnProcessList.addEventListener("click", () => sendBg({ type: "start-processing-list" }));
 
   btnTogglePause.addEventListener("click", async () => {
     const st = await chrome.runtime.sendMessage({ type: "get-status" });
@@ -144,12 +227,8 @@ async function init() {
 
   btnExport.addEventListener("click", () => sendBg({ type: "export-csv" }));
   btnExportXls.addEventListener("click", () => sendBg({ type: "export-xls" }));
-  btnExportAllCsv.addEventListener("click", () =>
-    sendBg({ type: "export-all-csv" })
-  );
-  btnExportAllXls.addEventListener("click", () =>
-    sendBg({ type: "export-all-xls" })
-  );
+  btnExportAllCsv.addEventListener("click", () => sendBg({ type: "export-all-csv" }));
+  btnExportAllXls.addEventListener("click", () => sendBg({ type: "export-all-xls" }));
 
   btnClear.addEventListener("click", async () => {
     if (!confirm("¿Vaciar datos del rol actual?")) return;
@@ -193,7 +272,6 @@ async function init() {
     e.target.value = "";
   });
 
-  genderMode.addEventListener("change", saveGenderConfig);
   btnSaveAuto.addEventListener("click", saveAutomation);
 
   btnSaveSheets.addEventListener("click", saveSheetsConfig);
@@ -206,9 +284,7 @@ async function init() {
     }
   });
 
-  btnExportBackup.addEventListener("click", () =>
-    sendBg({ type: "export-backup" })
-  );
+  btnExportBackup.addEventListener("click", () => sendBg({ type: "export-backup" }));
   btnImportBackup.addEventListener("click", () => fileImportBackup.click());
   fileImportBackup.addEventListener("change", async (e) => {
     const f = e.target.files?.[0];
@@ -227,11 +303,12 @@ async function init() {
 /* ===== Config género + diccionario ===== */
 
 async function loadGenderConfig() {
-  const cfg = await chrome.runtime
-    .sendMessage({ type: "get-gender-config" })
-    .catch(() => null);
+  const cfg = await chrome.runtime.sendMessage({ type: "get-gender-config" }).catch(() => null);
   if (!cfg) return;
   genderMode.value = cfg.genderMode || "auto";
+  // Forzar refresh del custom select de genderMode
+  genderMode.dispatchEvent(new Event("change", { bubbles: true }));
+
   inferGender.checked = !!cfg.inferGender;
   overridesText.value = Object.entries(cfg.genderOverrides || {})
     .map(([name, g]) => `${name}=${g}`)
@@ -251,9 +328,7 @@ async function saveGenderConfig() {
 }
 
 async function loadGenderDict() {
-  const dict = await chrome.runtime
-    .sendMessage({ type: "get-gender-dict" })
-    .catch(() => null);
+  const dict = await chrome.runtime.sendMessage({ type: "get-gender-dict" }).catch(() => null);
   if (!dict) return;
   dictText.value = Object.entries(dict || {})
     .map(([name, g]) => `${name}=${g}`)
@@ -270,11 +345,12 @@ async function saveGenderDict() {
 /* ===== Automatización ===== */
 
 async function loadAutomation() {
-  const cfg = await chrome.runtime
-    .sendMessage({ type: "get-automation-config" })
-    .catch(() => null);
+  const cfg = await chrome.runtime.sendMessage({ type: "get-automation-config" }).catch(() => null);
   if (!cfg) return;
+
   autoMode.value = cfg.autoMode || "off";
+  autoMode.dispatchEvent(new Event("change", { bubbles: true }));
+
   scanInterval.value = cfg.scanIntervalSec || 90;
 }
 
@@ -291,9 +367,7 @@ async function saveAutomation() {
 /* ===== Google Sheets / Webhook ===== */
 
 async function loadSheetsConfig() {
-  const cfg = await chrome.runtime
-    .sendMessage({ type: "get-sheets-config" })
-    .catch(() => null);
+  const cfg = await chrome.runtime.sendMessage({ type: "get-sheets-config" }).catch(() => null);
   if (!cfg) return;
   sheetsUrl.value = cfg.url || "";
   sheetsApiKey.value = cfg.apiKey || "";
@@ -334,17 +408,23 @@ function fillRoles(roles, current) {
     if (r === current) opt.selected = true;
     roleSelect.appendChild(opt);
   });
+
+  // refrescar el custom select asociado
+  roleSelect.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 async function addRole() {
   const v = roleCustom.value.trim();
   if (!v) return;
   const upper = v.toUpperCase();
+
   const st = await chrome.storage.local.get(["roles"]);
   const roles = st.roles || [];
   if (!roles.includes(upper)) roles.push(upper);
+
   await chrome.storage.local.set({ roles, currentRole: upper });
   fillRoles(roles, upper);
+
   roleCustom.value = "";
   await refreshRulesDescription();
   await refreshStatus();
@@ -385,9 +465,7 @@ async function deleteRole() {
 
 async function refreshRulesDescription() {
   try {
-    const desc = await chrome.runtime.sendMessage({
-      type: "get-rules-descriptions",
-    });
+    const desc = await chrome.runtime.sendMessage({ type: "get-rules-descriptions" });
     const role = roleSelect.value.toUpperCase();
     rulesInfo.textContent = desc?.[role] || "(sin reglas definidas)";
   } catch {
@@ -407,7 +485,6 @@ async function refreshStatus() {
       : "Procesando"
     : "Inactivo";
 
-  // Extra: estado de Sheets
   const sheetsTxt = st.sheetsSending
     ? "Sheets: enviando..."
     : st.sheetsOutboxLength
@@ -420,13 +497,7 @@ async function refreshStatus() {
   statusBadge.textContent = estadoTxt;
   statusBadge.className =
     "badge " +
-    (st.holdProcessing
-      ? "warn"
-      : st.processing
-      ? st.paused
-        ? "warn"
-        : "ok"
-      : "");
+    (st.holdProcessing ? "warn" : st.processing ? (st.paused ? "warn" : "ok") : "");
 
   if (st.holdProcessing) btnTogglePause.textContent = "Reanudar";
   else btnTogglePause.textContent = st.paused ? "Continuar" : "Pausar";
@@ -456,41 +527,44 @@ async function loadCustomRuleFields() {
   const st = await chrome.storage.local.get(["customRules"]);
   const role = (roleSelect.value || "").toUpperCase();
   const cr = st.customRules?.[role];
+
   if (cr) {
     ageMin.value = cr.ageMin;
     ageMax.value = cr.ageMax;
     document.querySelectorAll(".gchk").forEach((chk) => {
       chk.checked = cr.genders.includes(chk.value);
     });
-  } else {
-    switch (role) {
-      case "DOMICILIARIOS":
-        ageMin.value = 18;
-        ageMax.value = 50;
-        break;
-      case "CONDUCTORES":
-        ageMin.value = 30;
-        ageMax.value = 50;
-        break;
-      case "DELIVERY":
-        ageMin.value = 18;
-        ageMax.value = 50;
-        break;
-      case "AUXILIARES CARGA Y DESCARGA":
-        ageMin.value = 18;
-        ageMax.value = 40;
-        break;
-      default:
-        ageMin.value = 18;
-        ageMax.value = 50;
-    }
-    document.querySelectorAll(".gchk").forEach((chk) => {
-      chk.checked = true;
-      if (["DOMICILIARIOS", "CONDUCTORES", "AUXILIARES CARGA Y DESCARGA"].includes(role)) {
-        chk.checked = chk.value === "M";
-      }
-    });
+    return;
   }
+
+  switch (role) {
+    case "DOMICILIARIOS":
+      ageMin.value = 18;
+      ageMax.value = 50;
+      break;
+    case "CONDUCTORES":
+      ageMin.value = 30;
+      ageMax.value = 50;
+      break;
+    case "DELIVERY":
+      ageMin.value = 18;
+      ageMax.value = 50;
+      break;
+    case "AUXILIARES CARGA Y DESCARGA":
+      ageMin.value = 18;
+      ageMax.value = 40;
+      break;
+    default:
+      ageMin.value = 18;
+      ageMax.value = 50;
+  }
+
+  document.querySelectorAll(".gchk").forEach((chk) => {
+    chk.checked = true;
+    if (["DOMICILIARIOS", "CONDUCTORES", "AUXILIARES CARGA Y DESCARGA"].includes(role)) {
+      chk.checked = chk.value === "M";
+    }
+  });
 }
 
 async function saveCustomRule() {
@@ -498,10 +572,12 @@ async function saveCustomRule() {
   const genders = Array.from(document.querySelectorAll(".gchk"))
     .filter((c) => c.checked)
     .map((c) => c.value);
+
   if (!genders.length) {
     alert("Selecciona al menos un género.");
     return;
   }
+
   try {
     await sendBg({
       type: "add-or-update-custom-rule",
