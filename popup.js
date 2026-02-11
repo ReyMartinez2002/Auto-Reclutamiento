@@ -1,3 +1,7 @@
+// Igual al tuyo, con 2 mejoras:
+// - muestra información del outbox de Sheets (pendientes/reintentando)
+// - domWarning ya viene del background actualizado
+
 const DEFAULT_ROLES = [
   "DOMICILIARIOS",
   "CONDUCTORES",
@@ -19,9 +23,8 @@ const overridesText = document.getElementById("overridesText");
 const btnSaveGender = document.getElementById("btnSaveGender");
 const btnClearOverrides = document.getElementById("btnClearOverrides");
 
-const simulateMode = document.getElementById("simulateMode"); // NUEVO
+const simulateMode = document.getElementById("simulateMode");
 
-// Diccionario usuario
 const dictText = document.getElementById("dictText");
 const btnSaveDict = document.getElementById("btnSaveDict");
 const btnClearDict = document.getElementById("btnClearDict");
@@ -30,12 +33,10 @@ const btnImportDict = document.getElementById("btnImportDict");
 const fileImportDict = document.getElementById("fileImportDict");
 const chkMergeDict = document.getElementById("chkMergeDict");
 
-// Automatización
 const autoMode = document.getElementById("autoMode");
 const scanInterval = document.getElementById("scanInterval");
 const btnSaveAuto = document.getElementById("btnSaveAuto");
 
-// Google Sheets / Webhook
 const sheetsUrl = document.getElementById("sheetsUrl");
 const sheetsApiKey = document.getElementById("sheetsApiKey");
 const btnSaveSheets = document.getElementById("btnSaveSheets");
@@ -54,7 +55,7 @@ const btnClear = document.getElementById("btnClear");
 const btnRefreshRules = document.getElementById("btnRefreshRules");
 
 const statusInfo = document.getElementById("statusInfo");
-const domWarningInfo = document.getElementById("domWarningInfo"); // NUEVO
+const domWarningInfo = document.getElementById("domWarningInfo");
 const statusBadge = document.getElementById("statusBadge");
 const rulesInfo = document.getElementById("rulesInfo");
 
@@ -112,7 +113,6 @@ async function init() {
   );
 
   simulateMode.addEventListener("change", async () => {
-    // NUEVO
     await chrome.runtime.sendMessage({
       type: "set-simulate-mode",
       value: simulateMode.checked,
@@ -174,9 +174,11 @@ async function init() {
     dictText.value = "";
     await chrome.runtime.sendMessage({ type: "clear-gender-dict" });
   });
+
   btnExportDict.addEventListener("click", () =>
     sendBg({ type: "export-merged-gender-dict" })
   );
+
   btnImportDict.addEventListener("click", () => fileImportDict.click());
   fileImportDict.addEventListener("change", async (e) => {
     const f = e.target.files?.[0];
@@ -193,6 +195,7 @@ async function init() {
 
   genderMode.addEventListener("change", saveGenderConfig);
   btnSaveAuto.addEventListener("click", saveAutomation);
+
   btnSaveSheets.addEventListener("click", saveSheetsConfig);
   btnSendSheets.addEventListener("click", () => sendSheets("current"));
   btnSendSheetsAll.addEventListener("click", () => sendSheets("all"));
@@ -215,7 +218,7 @@ async function init() {
       type: "import-backup",
       payload: { text },
     });
-    await init(); // recargar todo
+    await init();
   });
 
   loadCustomRuleFields();
@@ -404,7 +407,16 @@ async function refreshStatus() {
       : "Procesando"
     : "Inactivo";
 
-  statusInfo.textContent = `Estado: ${estadoTxt} · Cola: ${st.queueLength} · Filas rol: ${st.rowsCount}`;
+  // Extra: estado de Sheets
+  const sheetsTxt = st.sheetsSending
+    ? "Sheets: enviando..."
+    : st.sheetsOutboxLength
+    ? `Sheets: ${st.sheetsOutboxLength} pendientes`
+    : "Sheets: OK";
+
+  statusInfo.textContent =
+    `Estado: ${estadoTxt} · Cola: ${st.queueLength} · Filas rol: ${st.rowsCount} · ${sheetsTxt}`;
+
   statusBadge.textContent = estadoTxt;
   statusBadge.className =
     "badge " +
@@ -416,11 +428,9 @@ async function refreshStatus() {
         : "ok"
       : "");
 
-  // Botón Pausar/Continuar/Reanudar
   if (st.holdProcessing) btnTogglePause.textContent = "Reanudar";
   else btnTogglePause.textContent = st.paused ? "Continuar" : "Pausar";
 
-  // Aviso de posible cambio de DOM
   if (st.domWarning && st.domWarning.count) {
     const w = st.domWarning;
     domWarningInfo.textContent =
@@ -431,7 +441,6 @@ async function refreshStatus() {
     domWarningInfo.textContent = "";
   }
 
-  // Reflejar modo simulación
   if (typeof st.simulateMode !== "undefined") {
     simulateMode.checked = !!st.simulateMode;
   }
@@ -477,13 +486,7 @@ async function loadCustomRuleFields() {
     }
     document.querySelectorAll(".gchk").forEach((chk) => {
       chk.checked = true;
-      if (
-        [
-          "DOMICILIARIOS",
-          "CONDUCTORES",
-          "AUXILIARES CARGA Y DESCARGA",
-        ].includes(role)
-      ) {
+      if (["DOMICILIARIOS", "CONDUCTORES", "AUXILIARES CARGA Y DESCARGA"].includes(role)) {
         chk.checked = chk.value === "M";
       }
     });
